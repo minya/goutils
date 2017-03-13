@@ -18,13 +18,34 @@ func UnmarshalJson(target interface{}, homeBasedPath string) error {
 
 	settingsBin, settingsErr := ioutil.ReadFile(settingsPath)
 	if settingsErr != nil {
-		return NoFile(settingsPath)
+		return settingsErr
 	}
 
 	errSettings := json.Unmarshal(settingsBin, target)
 	if nil != errSettings {
+		return errSettings
+	}
+	return nil
+}
+
+func MarshalJson(target interface{}, homeBasedPath string) error {
+	user, _ := user.Current()
+	settingsPath := path.Join(user.HomeDir, homeBasedPath)
+	_, err := os.Stat(settingsPath)
+	if err != nil {
 		return NoFile(settingsPath)
 	}
+
+	settingsBin, errSettings := json.Marshal(target)
+	if nil != errSettings {
+		return errSettings
+	}
+
+	settingsErr := ioutil.WriteFile(settingsPath, settingsBin, 0660)
+	if settingsErr != nil {
+		return settingsErr
+	}
+
 	return nil
 }
 
