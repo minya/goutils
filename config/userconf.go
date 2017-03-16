@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/user"
@@ -33,7 +34,12 @@ func MarshalJson(target interface{}, homeBasedPath string) error {
 	settingsPath := path.Join(user.HomeDir, homeBasedPath)
 	_, err := os.Stat(settingsPath)
 	if err != nil {
-		return NoFile(settingsPath)
+		f, err := os.Create(settingsPath)
+		if nil != err {
+			return fmt.Errorf("Unable to create %v", settingsPath)
+		} else {
+			f.Close()
+		}
 	}
 
 	settingsBin, errSettings := json.Marshal(target)
@@ -41,7 +47,7 @@ func MarshalJson(target interface{}, homeBasedPath string) error {
 		return errSettings
 	}
 
-	settingsErr := ioutil.WriteFile(settingsPath, settingsBin, 0660)
+	settingsErr := ioutil.WriteFile(settingsPath, settingsBin, 0644)
 	if settingsErr != nil {
 		return settingsErr
 	}
