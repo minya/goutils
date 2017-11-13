@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/user"
 	"path"
 )
 
 func UnmarshalJson(target interface{}, homeBasedPath string) error {
-	user, _ := user.Current()
-	settingsPath := path.Join(user.HomeDir, homeBasedPath)
+	settingsPath := path.Join(os.Getenv("HOME"), homeBasedPath)
 	_, err := os.Stat(settingsPath)
 	if err != nil {
 		return NoFile(settingsPath)
@@ -21,7 +19,6 @@ func UnmarshalJson(target interface{}, homeBasedPath string) error {
 	if settingsErr != nil {
 		return settingsErr
 	}
-
 	errSettings := json.Unmarshal(settingsBin, target)
 	if nil != errSettings {
 		return errSettings
@@ -30,8 +27,7 @@ func UnmarshalJson(target interface{}, homeBasedPath string) error {
 }
 
 func MarshalJson(target interface{}, homeBasedPath string) error {
-	user, _ := user.Current()
-	settingsPath := path.Join(user.HomeDir, homeBasedPath)
+	settingsPath := path.Join(os.Getenv("HOME"), homeBasedPath)
 	_, err := os.Stat(settingsPath)
 	if err != nil {
 		f, err := os.Create(settingsPath)
