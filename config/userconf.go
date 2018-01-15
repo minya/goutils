@@ -6,10 +6,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"strings"
 )
 
-func UnmarshalJson(target interface{}, homeBasedPath string) error {
-	settingsPath := path.Join(os.Getenv("HOME"), homeBasedPath)
+//UnmarshalJson reads and deserializes object from file
+func UnmarshalJson(target interface{}, relativeOrHomeBasedPath string) error {
+	settingsPath := buildPath(relativeOrHomeBasedPath)
 	_, err := os.Stat(settingsPath)
 	if err != nil {
 		return NoFile(settingsPath)
@@ -26,8 +28,9 @@ func UnmarshalJson(target interface{}, homeBasedPath string) error {
 	return nil
 }
 
-func MarshalJson(target interface{}, homeBasedPath string) error {
-	settingsPath := path.Join(os.Getenv("HOME"), homeBasedPath)
+//MarshalJson serializes and writes object to file
+func MarshalJson(target interface{}, relativeOrHomeBasedPath string) error {
+	settingsPath := buildPath(relativeOrHomeBasedPath)
 	_, err := os.Stat(settingsPath)
 	if err != nil {
 		f, err := os.Create(settingsPath)
@@ -49,6 +52,15 @@ func MarshalJson(target interface{}, homeBasedPath string) error {
 	}
 
 	return nil
+}
+
+func buildPath(relativeOrHomeBasedPath string) string {
+	if strings.Index(relativeOrHomeBasedPath, "~/") == 0 {
+		home := os.Getenv("HOME")
+		trimmedHomeBased := strings.TrimLeft(relativeOrHomeBasedPath, "~/")
+		return path.Join(home, trimmedHomeBased)
+	}
+	return relativeOrHomeBasedPath
 }
 
 type NoFileError struct {
