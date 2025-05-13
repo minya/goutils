@@ -1,15 +1,20 @@
+// Package config provides utilities for handling user configuration files.
+// It includes functions for marshaling and unmarshaling JSON configuration files,
+// with support for both relative and home-based (~/) paths.
 package config
 
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path"
 	"strings"
 )
 
-//UnmarshalJson reads and deserializes object from file
+// UnmarshalJson reads a JSON file from the specified path and deserializes it into the target object.
+// The path can be either relative to the current directory or home-based (starting with "~/").
+// Returns a NoFileError if the file doesn't exist or another error if reading or unmarshaling fails.
 func UnmarshalJson(target interface{}, relativeOrHomeBasedPath string) error {
 	settingsPath := buildPath(relativeOrHomeBasedPath)
 	_, err := os.Stat(settingsPath)
@@ -17,7 +22,7 @@ func UnmarshalJson(target interface{}, relativeOrHomeBasedPath string) error {
 		return NoFile(settingsPath)
 	}
 
-	settingsBin, settingsErr := ioutil.ReadFile(settingsPath)
+	settingsBin, settingsErr := os.ReadFile(settingsPath)
 	if settingsErr != nil {
 		return settingsErr
 	}
@@ -28,7 +33,10 @@ func UnmarshalJson(target interface{}, relativeOrHomeBasedPath string) error {
 	return nil
 }
 
-//MarshalJson serializes and writes object to file
+// MarshalJson serializes the target object to JSON and writes it to the specified file path.
+// The path can be either relative to the current directory or home-based (starting with "~/").
+// If the file doesn't exist, it will be created.
+// Returns an error if the file creation, marshaling, or writing operations fail.
 func MarshalJson(target interface{}, relativeOrHomeBasedPath string) error {
 	settingsPath := buildPath(relativeOrHomeBasedPath)
 	_, err := os.Stat(settingsPath)
@@ -46,7 +54,7 @@ func MarshalJson(target interface{}, relativeOrHomeBasedPath string) error {
 		return errSettings
 	}
 
-	settingsErr := ioutil.WriteFile(settingsPath, settingsBin, 0644)
+	settingsErr := os.WriteFile(settingsPath, settingsBin, 0644)
 	if settingsErr != nil {
 		return settingsErr
 	}
@@ -54,23 +62,28 @@ func MarshalJson(target interface{}, relativeOrHomeBasedPath string) error {
 	return nil
 }
 
+// buildPath converts a path that might be relative or home-based (starting with "~/")
+// to an absolute path. Home-based paths are expanded using the HOME environment variable.
 func buildPath(relativeOrHomeBasedPath string) string {
-	if strings.Index(relativeOrHomeBasedPath, "~/") == 0 {
+	if strings.HasPrefix(relativeOrHomeBasedPath, "~/") {
 		home := os.Getenv("HOME")
-		trimmedHomeBased := strings.TrimLeft(relativeOrHomeBasedPath, "~/")
+		trimmedHomeBased := strings.TrimPrefix(relativeOrHomeBasedPath, "~/")
 		return path.Join(home, trimmedHomeBased)
 	}
 	return relativeOrHomeBasedPath
 }
 
+// NoFileError is returned when an operation is attempted on a file that doesn't exist.
 type NoFileError struct {
 	msg string
 }
 
+// Error implements the error interface for NoFileError.
 func (e *NoFileError) Error() string {
 	return e.msg
 }
 
+// NoFile creates a new NoFileError for the specified filename.
 func NoFile(fileName string) error {
-	return &NoFileError{"No file exits: " + fileName}
+	return &NoFileError{"No file exists: " + fileName}
 }

@@ -1,3 +1,4 @@
+// Package web provides utilities for web requests and HTTP operations.
 package web
 
 import (
@@ -6,13 +7,15 @@ import (
 	"sync"
 )
 
-//Jar cookie jar object
+// Jar implements http.CookieJar interface for managing HTTP cookies.
+// It provides thread-safe storage and retrieval of cookies for HTTP requests.
 type Jar struct {
 	lk      sync.Mutex
 	cookies map[string]map[string]*http.Cookie
 }
 
-// NewJar allocates new jar object
+// NewJar creates and initializes a new cookie jar.
+// Returns a pointer to a Jar instance ready to store and retrieve cookies.
 func NewJar() *Jar {
 	jar := new(Jar)
 	jar.cookies = make(map[string]map[string]*http.Cookie)
@@ -20,8 +23,8 @@ func NewJar() *Jar {
 }
 
 // SetCookies handles the receipt of the cookies in a reply for the
-// given URL.  It may or may not choose to save the cookies, depending
-// on the jar's policy and implementation.
+// given URL. It stores all cookies associated with a URL host in the jar.
+// This method is thread-safe and implements the http.CookieJar interface.
 func (jar *Jar) SetCookies(u *url.URL, cookies []*http.Cookie) {
 	jar.lk.Lock()
 	if jar.cookies[u.Host] == nil {
@@ -35,8 +38,8 @@ func (jar *Jar) SetCookies(u *url.URL, cookies []*http.Cookie) {
 }
 
 // Cookies returns the cookies to send in a request for the given URL.
-// It is up to the implementation to honor the standard cookie use
-// restrictions such as in RFC 6265.
+// It returns all cookies stored for the URL's host.
+// This method is thread-safe and implements the http.CookieJar interface.
 func (jar *Jar) Cookies(u *url.URL) []*http.Cookie {
 	r := make([]*http.Cookie, len(jar.cookies[u.Host]))
 	idx := 0

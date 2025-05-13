@@ -1,24 +1,35 @@
 package web
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"time"
 )
 
-var timeout = time.Duration(10000 * time.Millisecond)
+// DefaultTimeout is the default timeout duration for HTTP requests
+var DefaultTimeout = 10 * time.Second
 
-func dialWithTimeout(secs int) func(network, addr string) (net.Conn, error) {
-	return func(network, addr string) (net.Conn, error) {
-		return net.DialTimeout(network, addr, timeout)
+// dialContextWithTimeout creates a dialer with the specified timeout in milliseconds
+func dialContextWithTimeout(ms int) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	timeout := time.Duration(ms) * time.Millisecond
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		dialer := &net.Dialer{
+			Timeout:   timeout,
+			KeepAlive: 30 * time.Second,
+		}
+		return dialer.DialContext(ctx, network, addr)
 	}
 }
 
-//proxyUrl, _ := url.Parse("https://192.168.14.140:8888")
+// DefaultTransport creates a customized http.Transport with the specified timeout in milliseconds
 func DefaultTransport(ms int) *http.Transport {
-	transport := new(http.Transport)
-	transport.Dial = dialWithTimeout(ms)
-	//transport.Proxy = http.ProxyURL(proxyUrl),
-	//transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true},
-	return transport
+	return &http.Transport{
+		DialContext:           dialContextWithTimeout(ms),
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		ForceAttemptHTTP2:     true,
+	}
 }
