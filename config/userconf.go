@@ -6,7 +6,6 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"strings"
@@ -43,7 +42,7 @@ func MarshalJson(target interface{}, relativeOrHomeBasedPath string) error {
 	if err != nil {
 		f, err := os.Create(settingsPath)
 		if nil != err {
-			return fmt.Errorf("Unable to create %v", settingsPath)
+			return fmt.Errorf("unable to create %v", settingsPath)
 		} else {
 			f.Close()
 		}
