@@ -41,6 +41,8 @@ func (jar *Jar) SetCookies(u *url.URL, cookies []*http.Cookie) {
 // It returns all cookies stored for the URL's host.
 // This method is thread-safe and implements the http.CookieJar interface.
 func (jar *Jar) Cookies(u *url.URL) []*http.Cookie {
+	jar.lk.Lock()
+	defer jar.lk.Unlock()
 	r := make([]*http.Cookie, len(jar.cookies[u.Host]))
 	idx := 0
 	for _, c := range jar.cookies[u.Host] {
