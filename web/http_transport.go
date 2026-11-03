@@ -22,14 +22,11 @@ func dialContextWithTimeout(ms int) func(ctx context.Context, network, addr stri
 	}
 }
 
-// DefaultTransport creates a customized http.Transport with the specified timeout in milliseconds
+// DefaultTransport returns net/http's default transport (proxy from the
+// HTTPS_PROXY/HTTP_PROXY/NO_PROXY environment, TLS handshake and idle
+// timeouts, HTTP/2) with the dial timeout set to ms milliseconds.
 func DefaultTransport(ms int) *http.Transport {
-	return &http.Transport{
-		DialContext:           dialContextWithTimeout(ms),
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		ForceAttemptHTTP2:     true,
-	}
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.DialContext = dialContextWithTimeout(ms)
+	return t
 }
