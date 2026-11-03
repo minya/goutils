@@ -3,51 +3,37 @@ package web
 
 import (
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
-	"sync"
+
+	"golang.org/x/net/publicsuffix"
 )
 
-// Jar implements http.CookieJar interface for managing HTTP cookies.
-// It provides thread-safe storage and retrieval of cookies for HTTP requests.
+// Jar implements http.CookieJar following RFC 6265: it honours Expires and
+// Max-Age (expired and deletion cookies are dropped), Secure (not sent over
+// plain http), Domain (sent to subdomains when set) and Path. It is safe for
+// concurrent use. It wraps net/http/cookiejar with the public suffix list,
+// so a server cannot set cookies for a whole public suffix such as .co.uk.
 type Jar struct {
-	lk      sync.Mutex
-	cookies map[string]map[string]*http.Cookie
+	inner *cookiejar.Jar
 }
 
 // NewJar creates and initializes a new cookie jar.
-// Returns a pointer to a Jar instance ready to store and retrieve cookies.
 func NewJar() *Jar {
-	jar := new(Jar)
-	jar.cookies = make(map[string]map[string]*http.Cookie)
-	return jar
+	inner, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+	if err != nil {
+		// cookiejar.New never fails in the standard library.
+		panic(err)
+	}
+	return &Jar{inner: inner}
 }
 
-// SetCookies handles the receipt of the cookies in a reply for the
-// given URL. It stores all cookies associated with a URL host in the jar.
-// This method is thread-safe and implements the http.CookieJar interface.
+// SetCookies handles the receipt of the cookies in a reply for the given URL.
 func (jar *Jar) SetCookies(u *url.URL, cookies []*http.Cookie) {
-	jar.lk.Lock()
-	if jar.cookies[u.Host] == nil {
-		jar.cookies[u.Host] = make(map[string]*http.Cookie)
-	}
-
-	for _, cookie := range cookies {
-		jar.cookies[u.Host][cookie.Name] = cookie
-	}
-	jar.lk.Unlock()
+	jar.inner.SetCookies(u, cookies)
 }
 
 // Cookies returns the cookies to send in a request for the given URL.
-// It returns all cookies stored for the URL's host.
-// This method is thread-safe and implements the http.CookieJar interface.
 func (jar *Jar) Cookies(u *url.URL) []*http.Cookie {
-	jar.lk.Lock()
-	defer jar.lk.Unlock()
-	r := make([]*http.Cookie, len(jar.cookies[u.Host]))
-	idx := 0
-	for _, c := range jar.cookies[u.Host] {
-		r[idx] = c
-		idx++
-	}
-	return r
+	return jar.inner.Cookies(u)
 }

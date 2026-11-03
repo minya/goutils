@@ -1,3 +1,5 @@
 module github.com/minya/goutils
 
-go 1.23.3
+go 1.24.0
+
+require golang.org/x/net v0.48.0

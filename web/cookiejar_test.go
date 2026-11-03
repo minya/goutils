@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"sync"
 	"testing"
+	"time"
 )
 
 // Cookies and SetCookies are called concurrently by net/http for requests in
@@ -46,5 +47,46 @@ func TestJarReturnsCookiesPerHost(t *testing.T) {
 	}
 	if got := jar.Cookies(b); len(got) != 0 {
 		t.Fatalf("b cookies = %v", got)
+	}
+}
+
+// F62: deletion, expired and Secure cookies are handled per RFC 6265, and a
+// Domain cookie reaches subdomains.
+func TestJarFollowsCookieAttributes(t *testing.T) {
+	jar := NewJar()
+	https, _ := url.Parse("https://rutracker.org/forum/login.php")
+	plain, _ := url.Parse("http://rutracker.org/forum/index.php")
+	sub, _ := url.Parse("https://bt.rutracker.org/x")
+
+	jar.SetCookies(https, []*http.Cookie{
+		{Name: "bb_session", Value: "s", Secure: true},
+		{Name: "dead", Value: "d", Expires: time.Unix(1, 0)},
+		{Name: "domainwide", Value: "w", Domain: ".rutracker.org", Path: "/"},
+	})
+	names := func(u *url.URL) map[string]string {
+		m := map[string]string{}
+		for _, c := range jar.Cookies(u) {
+			m[c.Name] = c.Value
+		}
+		return m
+	}
+
+	if got := names(https); got["bb_session"] != "s" || got["domainwide"] != "w" {
+		t.Errorf("https cookies = %v, want bb_session and domainwide", got)
+	}
+	if _, ok := names(https)["dead"]; ok {
+		t.Error("an expired cookie is still sent")
+	}
+	if _, ok := names(plain)["bb_session"]; ok {
+		t.Error("a Secure cookie is sent over plain http")
+	}
+	if got := names(sub); got["domainwide"] != "w" {
+		t.Errorf("subdomain cookies = %v, want the Domain cookie", got)
+	}
+
+	// Logout: the server deletes the session with Max-Age<0.
+	jar.SetCookies(https, []*http.Cookie{{Name: "bb_session", Value: "", MaxAge: -1}})
+	if _, ok := names(https)["bb_session"]; ok {
+		t.Error("a deleted cookie is still sent")
 	}
 }
