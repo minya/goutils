@@ -5,59 +5,70 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 )
 
 // UnmarshalJson reads a JSON file from the specified path and deserializes it into the target object.
 // The path can be either relative to the current directory or home-based (starting with "~/").
-// Returns a NoFileError if the file doesn't exist or another error if reading or unmarshaling fails.
+// Returns a NoFileError (which matches fs.ErrNotExist) only when the file does not exist; any
+// other failure, such as permission denied, is returned as is, so callers do not mistake an
+// unreadable file for a missing one.
 func UnmarshalJson(target interface{}, relativeOrHomeBasedPath string) error {
 	settingsPath := buildPath(relativeOrHomeBasedPath)
-	_, err := os.Stat(settingsPath)
+	settingsBin, err := os.ReadFile(settingsPath)
+	if errors.Is(err, fs.ErrNotExist) {
+		return &NoFileError{msg: "No file exists: " + settingsPath, err: err}
+	}
 	if err != nil {
-		return NoFile(settingsPath)
+		return fmt.Errorf("reading %s: %w", settingsPath, err)
 	}
-
-	settingsBin, settingsErr := os.ReadFile(settingsPath)
-	if settingsErr != nil {
-		return settingsErr
-	}
-	errSettings := json.Unmarshal(settingsBin, target)
-	if nil != errSettings {
-		return errSettings
+	if err := json.Unmarshal(settingsBin, target); err != nil {
+		return fmt.Errorf("parsing %s: %w", settingsPath, err)
 	}
 	return nil
 }
 
 // MarshalJson serializes the target object to JSON and writes it to the specified file path.
 // The path can be either relative to the current directory or home-based (starting with "~/").
-// If the file doesn't exist, it will be created.
-// Returns an error if the file creation, marshaling, or writing operations fail.
+// Settings usually hold tokens and passwords, so the file is written with mode 0600, and it is
+// replaced atomically: the JSON goes to a temporary file in the same directory, which is synced
+// and then renamed over the target, so a crash never leaves a truncated file.
 func MarshalJson(target interface{}, relativeOrHomeBasedPath string) error {
 	settingsPath := buildPath(relativeOrHomeBasedPath)
-	_, err := os.Stat(settingsPath)
+	settingsBin, err := json.Marshal(target)
 	if err != nil {
-		f, err := os.Create(settingsPath)
-		if nil != err {
-			return fmt.Errorf("unable to create %v", settingsPath)
-		} else {
-			f.Close()
-		}
+		return err
 	}
 
-	settingsBin, errSettings := json.Marshal(target)
-	if nil != errSettings {
-		return errSettings
+	tmp, err := os.CreateTemp(filepath.Dir(settingsPath), "."+filepath.Base(settingsPath)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("unable to create %v: %w", settingsPath, err)
 	}
-
-	settingsErr := os.WriteFile(settingsPath, settingsBin, 0644)
-	if settingsErr != nil {
-		return settingsErr
+	defer os.Remove(tmp.Name()) // no-op once renamed
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close()
+		return fmt.Errorf("writing %v: %w", settingsPath, err)
 	}
-
+	if _, err := tmp.Write(settingsBin); err != nil {
+		tmp.Close()
+		return fmt.Errorf("writing %v: %w", settingsPath, err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("writing %v: %w", settingsPath, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("writing %v: %w", settingsPath, err)
+	}
+	if err := os.Rename(tmp.Name(), settingsPath); err != nil {
+		return fmt.Errorf("writing %v: %w", settingsPath, err)
+	}
 	return nil
 }
 
@@ -75,6 +86,7 @@ func buildPath(relativeOrHomeBasedPath string) string {
 // NoFileError is returned when an operation is attempted on a file that doesn't exist.
 type NoFileError struct {
 	msg string
+	err error
 }
 
 // Error implements the error interface for NoFileError.
@@ -82,7 +94,15 @@ func (e *NoFileError) Error() string {
 	return e.msg
 }
 
+// Unwrap returns the underlying error; it matches fs.ErrNotExist.
+func (e *NoFileError) Unwrap() error {
+	if e.err == nil {
+		return fs.ErrNotExist
+	}
+	return e.err
+}
+
 // NoFile creates a new NoFileError for the specified filename.
 func NoFile(fileName string) error {
-	return &NoFileError{"No file exists: " + fileName}
+	return &NoFileError{msg: "No file exists: " + fileName, err: fs.ErrNotExist}
 }
